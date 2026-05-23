@@ -5,7 +5,7 @@
 #include <cstring>
 #include <thread>
 
-#pragma comment(lib, "ws2_32.lib")  // Link Winsock
+#pragma comment(lib, "ws2_32.lib")  
 
 // Constructor
 Server::Server(int port) {
@@ -15,7 +15,7 @@ Server::Server(int port) {
 // Start server
 void Server::start() {
     WSADATA wsa;
-    WSAStartup(MAKEWORD(2, 2), &wsa);  // 🔥 Initialize Winsock
+    WSAStartup(MAKEWORD(2, 2), &wsa);  
 
     struct sockaddr_in address;
     int addrlen = sizeof(address);
@@ -67,16 +67,57 @@ void Server::start() {
 void Server::handleClient(int client_socket) {
     char buffer[30000] = {0};
 
-    recv(client_socket, buffer, 30000, 0);  // FIXED (was read)
+    recv(client_socket, buffer, 30000, 0);
 
-    std::cout << "\n📥 Request:\n" << buffer << std::endl;
+    std::string request(buffer);
 
-    const char* response =
-        "HTTP/1.1 200 OK\r\n"
-        "Content-Type: text/html\r\n\r\n"
-        "<html><body><h1> C++ Windows Server Working!</h1></body></html>";
+    std::cout << "\n Request:\n" << request << std::endl;
 
-    send(client_socket, response, strlen(response), 0);
+    std::string body;
+    std::string response;
+
+    // ✅ ROUTING
+    if (request.find("GET /api") != std::string::npos) {
+
+        std::cout << "Matched /api\n";
+
+        body = "{\"message\": \"Hello from C++ API \"}";
+
+        response =
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: application/json\r\n"
+            "Content-Length: " + std::to_string(body.size()) + "\r\n"
+            "Connection: close\r\n\r\n" +
+            body;
+    }
+    else if (request.find("GET /about") != std::string::npos) {
+
+        std::cout << "Matched /about\n";
+
+        body = "<html><body><h1>About Page</h1></body></html>";
+
+        response =
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: text/html\r\n"
+            "Content-Length: " + std::to_string(body.size()) + "\r\n"
+            "Connection: close\r\n\r\n" +
+            body;
+    }
+    else {
+
+        std::cout << "Matched default\n";
+
+        body = "<html><body><h1> Home Page</h1></body></html>";
+
+        response =
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: text/html\r\n"
+            "Content-Length: " + std::to_string(body.size()) + "\r\n"
+            "Connection: close\r\n\r\n" +
+            body;
+    }
+
+    send(client_socket, response.c_str(), response.size(), 0);
 
     closesocket(client_socket);
 }
