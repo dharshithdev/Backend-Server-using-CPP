@@ -18,12 +18,13 @@ void Router::use(Middleware middleware) {
 // Route handler
 std::string Router::route(const std::string& method, const std::string& path, const std::string& body) {
 
-    //  RUN ALL MIDDLEWARE FIRST
     for (auto& mw : middlewares) {
-        mw(method, path);
+        if (!mw(method, path)) {
+            return "403 Forbidden"; 
+        }
     }
 
-    //  THEN ROUTES
+    // ROUTES
     if (method == "GET" && getRoutes.count(path)) {
         return getRoutes[path](body);
     }

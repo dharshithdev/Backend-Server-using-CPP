@@ -4,7 +4,6 @@
 #include <sstream>
 #include <fstream>
 #include <thread>
-#include "router.h"
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -12,22 +11,22 @@
 Server::Server(int port) {
     this->port = port;
 
-    router.use([](const std::string& method, const std::string& path) {
-        std::cout << " " << method << " " << path << std::endl;
-    });
-
-    //  Middleware 2 — Fake Auth check
+    // Auth Middleware
     router.use([](const std::string& method, const std::string& path) {
         if (path == "/admin") {
-            std::cout << " Checking admin access...\n";
-        }
-    });
+            bool isLoggedIn = true;
 
-    //  ROUTES (Express-style)
+            if (!isLoggedIn) {
+                std::cout << "Access denied to /admin\n";
+                return false;
+            }
+        }
+        return true;
+    });
 
     // GET /api
     router.get("/api", [](const std::string& body) {
-        return "{\"message\": \"GET API \"}";
+        return "{\"message\": \"GET API working\"}";
     });
 
     // POST /api
@@ -40,7 +39,7 @@ Server::Server(int port) {
             name = body.substr(start, end - start);
         }
 
-        return "{\"message\": \"Hello " + name + " \"}";
+        return "{\"message\": \"Hello " + name + "\"}";
     });
 
     // GET /about
@@ -48,8 +47,9 @@ Server::Server(int port) {
         return "<html><body><h1>About Page</h1></body></html>";
     });
 
+    // GET /admin
     router.get("/admin", [](const std::string& body) {
-        return "<html><body><h1>Admin Panel </h1></body></html>";
+        return "<html><body><h1>Admin Panel</h1></body></html>";
     });
 }
 
@@ -82,7 +82,7 @@ void Server::start() {
         return;
     }
 
-    std::cout << " Server running on port " << port << std::endl;
+    std::cout << "Server running on port " << port << std::endl;
 
     while (true) {
         SOCKET client_socket = accept(server_fd, (struct sockaddr*)&address, &addrlen);
@@ -106,23 +106,19 @@ void Server::handleClient(SOCKET client_socket) {
     recv(client_socket, buffer, 30000, 0);
 
     std::string request(buffer);
-    std::cout << "\n Request:\n" << request << std::endl;
+    std::cout << "\nRequest:\n" << request << std::endl;
 
-    //  Parse METHOD + PATH
+    // Parse method and path
     std::istringstream iss(request);
     std::string method, path;
     iss >> method >> path;
 
-    std::cout << " Method: " << method << " | Path: " << path << std::endl;
-
-    //  Extract BODY (for POST)
+    // Extract body
     std::string bodyData = "";
     size_t pos = request.find("\r\n\r\n");
     if (pos != std::string::npos) {
         bodyData = request.substr(pos + 4);
     }
-
-    std::cout << " Body: " << bodyData << std::endl;
 
     // Ignore favicon
     if (path == "/favicon.ico") {
@@ -130,7 +126,7 @@ void Server::handleClient(SOCKET client_socket) {
         return;
     }
 
-    //  ROUTER handles logic
+    // Route handling
     std::string body = router.route(method, path, bodyData);
 
     std::string contentType = "text/html";
@@ -139,7 +135,7 @@ void Server::handleClient(SOCKET client_socket) {
         contentType = "application/json";
     }
 
-    //  Serve index.html for "/"
+    // Serve index.html for root
     if (path == "/") {
         std::ifstream file("index.html");
 
@@ -153,13 +149,19 @@ void Server::handleClient(SOCKET client_socket) {
         }
     }
 
-    //  Handle 404
+    // Handle 403
+    if (body == "403 Forbidden") {
+        body = "<html><body><h1>403 Forbidden</h1></body></html>";
+        contentType = "text/html";
+    }
+
+    // Handle 404
     if (body == "404 Not Found") {
         body = "<html><body><h1>404 Not Found</h1></body></html>";
         contentType = "text/html";
     }
 
-    //  FINAL RESPONSE
+    // Response
     std::string response =
         "HTTP/1.1 200 OK\r\n"
         "Content-Type: " + contentType + "\r\n"
