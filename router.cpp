@@ -1,5 +1,7 @@
 #include "router.h"
+#include <iostream>
 
+// Register routes
 void Router::get(const std::string& path, Handler handler) {
     getRoutes[path] = handler;
 }
@@ -8,7 +10,20 @@ void Router::post(const std::string& path, Handler handler) {
     postRoutes[path] = handler;
 }
 
+// Register middleware
+void Router::use(Middleware middleware) {
+    middlewares.push_back(middleware);
+}
+
+// Route handler
 std::string Router::route(const std::string& method, const std::string& path, const std::string& body) {
+
+    //  RUN ALL MIDDLEWARE FIRST
+    for (auto& mw : middlewares) {
+        mw(method, path);
+    }
+
+    //  THEN ROUTES
     if (method == "GET" && getRoutes.count(path)) {
         return getRoutes[path](body);
     }
