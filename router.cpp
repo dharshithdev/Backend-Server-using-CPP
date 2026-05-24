@@ -1,0 +1,21 @@
+#include "router.h"
+
+void Router::get(const std::string& path, Handler handler) {
+    getRoutes[path] = handler;
+}
+
+void Router::post(const std::string& path, Handler handler) {
+    postRoutes[path] = handler;
+}
+
+std::string Router::route(const std::string& method, const std::string& path, const std::string& body) {
+    if (method == "GET" && getRoutes.count(path)) {
+        return getRoutes[path](body);
+    }
+
+    if (method == "POST" && postRoutes.count(path)) {
+        return postRoutes[path](body);
+    }
+
+    return "404 Not Found";
+}

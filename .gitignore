@@ -1,0 +1,23 @@
+# Build files
+*.exe
+*.out
+*.o
+*.obj
+
+# Debug files
+*.log
+
+# VS Code
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+
+# MSYS2 / MinGW build leftovers
+*.dll
+*.a
+*.lib

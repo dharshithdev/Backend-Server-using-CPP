@@ -4,12 +4,38 @@
 #include <sstream>
 #include <fstream>
 #include <thread>
+#include "router.h"
 
 #pragma comment(lib, "ws2_32.lib")
 
 // Constructor
 Server::Server(int port) {
     this->port = port;
+
+    // 🔥 ROUTES (Express-style)
+
+    // GET /api
+    router.get("/api", [](const std::string& body) {
+        return "{\"message\": \"GET API 🚀\"}";
+    });
+
+    // POST /api
+    router.post("/api", [](const std::string& body) {
+        std::string name = "User";
+
+        if (body.find("name") != std::string::npos) {
+            size_t start = body.find(":") + 2;
+            size_t end = body.find("\"", start);
+            name = body.substr(start, end - start);
+        }
+
+        return "{\"message\": \"Hello " + name + " 🚀\"}";
+    });
+
+    // GET /about
+    router.get("/about", [](const std::string& body) {
+        return "<html><body><h1>About Page</h1></body></html>";
+    });
 }
 
 // Start server
@@ -41,7 +67,7 @@ void Server::start() {
         return;
     }
 
-    std::cout << " Server running on port " << port << std::endl;
+    std::cout << "🚀 Server running on port " << port << std::endl;
 
     while (true) {
         SOCKET client_socket = accept(server_fd, (struct sockaddr*)&address, &addrlen);
@@ -65,16 +91,16 @@ void Server::handleClient(SOCKET client_socket) {
     recv(client_socket, buffer, 30000, 0);
 
     std::string request(buffer);
-    std::cout << "\n Request:\n" << request << std::endl;
+    std::cout << "\n📥 Request:\n" << request << std::endl;
 
-    //  Parse METHOD + PATH
+    // 🔥 Parse METHOD + PATH
     std::istringstream iss(request);
     std::string method, path;
     iss >> method >> path;
 
-    std::cout << " Method: " << method << " | Path: " << path << std::endl;
+    std::cout << "➡️ Method: " << method << " | Path: " << path << std::endl;
 
-    //  Extract BODY (important for POST)
+    // 🔥 Extract BODY (for POST)
     std::string bodyData = "";
     size_t pos = request.find("\r\n\r\n");
     if (pos != std::string::npos) {
@@ -89,52 +115,36 @@ void Server::handleClient(SOCKET client_socket) {
         return;
     }
 
-    std::string body;
+    // 🔥 ROUTER handles logic
+    std::string body = router.route(method, path, bodyData);
+
     std::string contentType = "text/html";
 
-    //  ROUTING
-
-    // GET API
-    if (method == "GET" && path == "/api") {
+    if (path == "/api") {
         contentType = "application/json";
-        body = "{\"message\": \"GET API working \"}";
     }
 
-    // POST API
-    else if (method == "POST" && path == "/api") {
-        contentType = "application/json";
-
-        std::string name = "User";
-
-        // Simple JSON parsing
-        if (bodyData.find("name") != std::string::npos) {
-            size_t start = bodyData.find(":") + 2;
-            size_t end = bodyData.find("\"", start);
-            name = bodyData.substr(start, end - start);
-        }
-
-        body = "{\"message\": \"Hello " + name + " \"}";
-    }
-
-    // ABOUT
-    else if (path == "/about") {
-        body = "<html><body><h1>About Page</h1></body></html>";
-    }
-
-    // HOME (serve file)
-    else {
+    // 🔥 Serve index.html for "/"
+    if (path == "/") {
         std::ifstream file("index.html");
 
         if (file) {
-            std::stringstream fileBuffer;
-            fileBuffer << file.rdbuf();
-            body = fileBuffer.str();
+            std::stringstream buffer;
+            buffer << file.rdbuf();
+            body = buffer.str();
+            contentType = "text/html";
         } else {
             body = "<html><body><h1>Home Page</h1></body></html>";
         }
     }
 
-    //  FINAL RESPONSE
+    // 🔥 Handle 404
+    if (body == "404 Not Found") {
+        body = "<html><body><h1>404 Not Found</h1></body></html>";
+        contentType = "text/html";
+    }
+
+    // 🔥 FINAL RESPONSE
     std::string response =
         "HTTP/1.1 200 OK\r\n"
         "Content-Type: " + contentType + "\r\n"
