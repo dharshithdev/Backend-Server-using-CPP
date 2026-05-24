@@ -1,3 +1,6 @@
+#ifndef SERVER_H
+#define SERVER_H
+
 #include <winsock2.h>
 
 class Server {
@@ -8,5 +11,7 @@ private:
 public:
     Server(int port);
     void start();
-    void handleClient(int client_socket);
+    void handleClient(SOCKET client_socket);
 };
+
+#endif

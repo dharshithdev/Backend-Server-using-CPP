@@ -1,11 +1,11 @@
 #include "server.h"
 #include <iostream>
-#include <winsock2.h>
 #include <ws2tcpip.h>
-#include <cstring>
+#include <sstream>
+#include <fstream>
 #include <thread>
 
-#pragma comment(lib, "ws2_32.lib")  
+#pragma comment(lib, "ws2_32.lib")
 
 // Constructor
 Server::Server(int port) {
@@ -15,12 +15,11 @@ Server::Server(int port) {
 // Start server
 void Server::start() {
     WSADATA wsa;
-    WSAStartup(MAKEWORD(2, 2), &wsa);  
+    WSAStartup(MAKEWORD(2, 2), &wsa);
 
     struct sockaddr_in address;
     int addrlen = sizeof(address);
 
-    // 1. Create socket
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
 
     if (server_fd == INVALID_SOCKET) {
@@ -28,18 +27,15 @@ void Server::start() {
         return;
     }
 
-    // 2. Set address + port
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;
     address.sin_port = htons(port);
 
-    // 3. Bind
     if (bind(server_fd, (struct sockaddr*)&address, sizeof(address)) == SOCKET_ERROR) {
         std::cout << "Bind failed\n";
         return;
     }
 
-    // 4. Listen
     if (listen(server_fd, 10) == SOCKET_ERROR) {
         std::cout << "Listen failed\n";
         return;
@@ -47,7 +43,6 @@ void Server::start() {
 
     std::cout << " Server running on port " << port << std::endl;
 
-    // 5. Accept loop
     while (true) {
         SOCKET client_socket = accept(server_fd, (struct sockaddr*)&address, &addrlen);
 
@@ -63,59 +58,89 @@ void Server::start() {
     WSACleanup();
 }
 
-// Handle each client
-void Server::handleClient(int client_socket) {
+// Handle client
+void Server::handleClient(SOCKET client_socket) {
     char buffer[30000] = {0};
 
     recv(client_socket, buffer, 30000, 0);
 
     std::string request(buffer);
-
     std::cout << "\n Request:\n" << request << std::endl;
 
+    //  Parse METHOD + PATH
+    std::istringstream iss(request);
+    std::string method, path;
+    iss >> method >> path;
+
+    std::cout << " Method: " << method << " | Path: " << path << std::endl;
+
+    //  Extract BODY (important for POST)
+    std::string bodyData = "";
+    size_t pos = request.find("\r\n\r\n");
+    if (pos != std::string::npos) {
+        bodyData = request.substr(pos + 4);
+    }
+
+    std::cout << "📦 Body: " << bodyData << std::endl;
+
+    // Ignore favicon
+    if (path == "/favicon.ico") {
+        closesocket(client_socket);
+        return;
+    }
+
     std::string body;
-    std::string response;
+    std::string contentType = "text/html";
 
-    // ✅ ROUTING
-    if (request.find("GET /api") != std::string::npos) {
+    //  ROUTING
 
-        std::cout << "Matched /api\n";
-
-        body = "{\"message\": \"Hello from C++ API \"}";
-
-        response =
-            "HTTP/1.1 200 OK\r\n"
-            "Content-Type: application/json\r\n"
-            "Content-Length: " + std::to_string(body.size()) + "\r\n"
-            "Connection: close\r\n\r\n" +
-            body;
+    // GET API
+    if (method == "GET" && path == "/api") {
+        contentType = "application/json";
+        body = "{\"message\": \"GET API working \"}";
     }
-    else if (request.find("GET /about") != std::string::npos) {
 
-        std::cout << "Matched /about\n";
+    // POST API
+    else if (method == "POST" && path == "/api") {
+        contentType = "application/json";
 
+        std::string name = "User";
+
+        // Simple JSON parsing
+        if (bodyData.find("name") != std::string::npos) {
+            size_t start = bodyData.find(":") + 2;
+            size_t end = bodyData.find("\"", start);
+            name = bodyData.substr(start, end - start);
+        }
+
+        body = "{\"message\": \"Hello " + name + " \"}";
+    }
+
+    // ABOUT
+    else if (path == "/about") {
         body = "<html><body><h1>About Page</h1></body></html>";
-
-        response =
-            "HTTP/1.1 200 OK\r\n"
-            "Content-Type: text/html\r\n"
-            "Content-Length: " + std::to_string(body.size()) + "\r\n"
-            "Connection: close\r\n\r\n" +
-            body;
     }
+
+    // HOME (serve file)
     else {
+        std::ifstream file("index.html");
 
-        std::cout << "Matched default\n";
-
-        body = "<html><body><h1> Home Page</h1></body></html>";
-
-        response =
-            "HTTP/1.1 200 OK\r\n"
-            "Content-Type: text/html\r\n"
-            "Content-Length: " + std::to_string(body.size()) + "\r\n"
-            "Connection: close\r\n\r\n" +
-            body;
+        if (file) {
+            std::stringstream fileBuffer;
+            fileBuffer << file.rdbuf();
+            body = fileBuffer.str();
+        } else {
+            body = "<html><body><h1>Home Page</h1></body></html>";
+        }
     }
+
+    //  FINAL RESPONSE
+    std::string response =
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Type: " + contentType + "\r\n"
+        "Content-Length: " + std::to_string(body.size()) + "\r\n"
+        "Connection: close\r\n\r\n" +
+        body;
 
     send(client_socket, response.c_str(), response.size(), 0);
 
